@@ -27,7 +27,7 @@ Session(app)
 conn = sqlite3.connect('finance.db', check_same_thread=False)
 c = conn.cursor()
 
-# Create a customers table
+# Create a users table
 c.execute("""CREATE TABLE IF NOT EXISTS users
            (
                user_id INTEGER PRIMARY KEY,
@@ -39,18 +39,19 @@ c.execute("""CREATE TABLE IF NOT EXISTS users
 conn.commit()
 
 # Create a transactions table
-# c.execute("""CREATE TABLE IF NOT EXISTS transactions
-#            (
-#                transaction_id INTEGER PRIMARY KEY,
-#                symbol TEXT,
-#                shares REAL,
-#                price REAL,
-#                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
-#                symbol_balance INTEGER,
-#                FOREIGN KEY (user_id) REFERENCES customers (user_id)
-#            )
-#            """)
-# conn.commit()
+c.execute("""CREATE TABLE IF NOT EXISTS transactions
+           (
+               transaction_id INTEGER PRIMARY KEY,
+               symbol TEXT,
+               shares REAL,
+               price REAL,
+               timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+               symbol_balance INTEGER,
+               user_id INTEGER,
+               FOREIGN KEY (user_id) REFERENCES users (user_id)
+           )
+           """)
+conn.commit()
 
 
 @app.after_request
@@ -68,7 +69,7 @@ def index():
     """Show portfolio of stocks"""
     
     # User reached route via GET (as by clicking a link or via redirect
-    return render_template('register.html')
+    return render_template('index.html')
                            
                            
 @app.route("/register", methods=["GET", "POST"])
@@ -76,7 +77,7 @@ def register():
     """Register user"""
 
     # User reached route via POST (as by submitting a form via POST)
-    if request.method == 'POST':
+    if request.method == "POST":
 
         # Ensure username was submitted
         if not request.form.get('username'):
@@ -109,3 +110,51 @@ def register():
     # User reached route via GET (as by clicking a link or via redirect)
     else:
         return render_template('register.html')
+
+    
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Log user in"""
+
+    # Forget any user_id
+    session.clear()
+
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == 'POST':
+
+        # Ensure username was submitted
+        if not request.form.get('username'):
+            return apology("must provide username", 400)
+
+        # Ensure password was submitted
+        elif not request.form.get('password'):
+            return apology("must provide password", 400)
+
+        # Query database for username
+        c.execute("SELECT * FROM users WHERE username = ?", [request.form.get('username')])
+        data = c.fetchall()
+
+        # Ensure username exists and password is correct
+        if len(data) != 1 or not check_password_hash(data[0][2], request.form.get('password')):
+            return apology("invalid username and/or password", 400)
+
+        # Remember which user has logged in
+        session['user_id'] = data[0]
+
+        # Redirect user to index page
+        return redirect('/', 200)
+
+    # User reached route via GET (as by clicking a link or via redirect)
+    else:
+        return render_template('login.html')
+    
+    
+@app.route('/logout')
+def logout():
+    """Log user out"""
+
+    # Forget any user_id
+    session.clear()
+
+    # Redirect user to login form
+    return redirect('/')

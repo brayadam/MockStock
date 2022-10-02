@@ -6,43 +6,7 @@
 {% endblock %}
 
 {% block main %}
-<table class="table">
-    <thead>
-      <tr>
-        <th scope="col">Symbol</th>
-        <th scope="col">Name</th>
-        <th scope="col">Shares</th>
-        <th scope="col">Price</th>
-        <th scope="col">Total</th>
-      </tr>
-    </thead>
-    <tbody>
-        {% for transaction in transactions %}
-            <tr>
-                <td>{{ transaction["symbol"].upper() }}</td>
-                <td>{{ transaction["name"] }}</td>
-                <td>{{ transaction["SUM(shares)"] }}</td>
-                <td>{{ transaction["price"] }}</td>
-                <td>{{ transaction["value"] }}</td>
-                <td></td>
-            </tr>
-        {% endfor %}
-    </tbody>
-    <tfoot>
-        <tr>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td><b>Cash</b></td>
-            <td><b>{{ cash }}</b></td>
-        </tr>
-        <tr>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td><b>Total</b></td>
-            <td><b>{{ total_funds }}</b></td>
-        </tr>
-    </tfoot>
-  </table>
+<body><h1>
+    hello, welcome to the index page
+</body></h1>
 {% endblock %}
