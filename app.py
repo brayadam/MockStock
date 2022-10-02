@@ -139,7 +139,7 @@ def login():
             return apology("invalid username and/or password", 400)
 
         # Remember which user has logged in
-        session['user_id'] = data[0]
+        session['user_id'] = data[0][0]
 
         # Redirect user to index page
         return redirect('/', 200)
