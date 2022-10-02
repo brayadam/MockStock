@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Deposit
+{% endblock %}
+
+{% block main %}
+    <form action="/deposit" method="post">
+        <div class="mb-3">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="cardholder_name" placeholder="Cardholder's name" type="text">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="card_number" placeholder="Card number" type="number">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="expiry_date" placeholder="Expiry date MMYY" type="text">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="cvc" placeholder="CVC" type="number">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="zip_code" placeholder="Zip code" type="text">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="deposit_amount" placeholder="Amount to deposit" type="number">
+        </div>
+        <button class="btn btn-primary" type="submit">Deposit</button>
+    </form>
+{% endblock %}
