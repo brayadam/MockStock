@@ -24,35 +24,22 @@ app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
 # Connect to database and create a cursor
-
-connection = sqlite3.connect('finance.db', check_same_thread=False)
-db = connection.cursor()
-
-@app.after_request
-def after_request(response):
-    """Ensure responses aren't cached"""
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Expires'] = 0
-    response.headers['Pragma'] = 'no-cache'
-    return response
-
+conn = sqlite3.connect('finance.db', check_same_thread=False)
+c = conn.cursor()
 
 # Create a customers table
-
-db.execute("""CREATE TABLE IF NOT EXISTS customers
+c.execute("""CREATE TABLE IF NOT EXISTS users
            (
+               user_id INTEGER PRIMARY KEY,
                username TEXT NOT NULL,
                password_hash TEXT NOT NULL,
                cash REAL
            )
            """)
-
-# Commit command
-connection.commit()
+conn.commit()
 
 # Create a transactions table
-
-# db.execute("""CREATE TABLE IF NOT EXISTS transactions
+# c.execute("""CREATE TABLE IF NOT EXISTS transactions
 #            (
 #                transaction_id INTEGER PRIMARY KEY,
 #                symbol TEXT,
@@ -63,6 +50,16 @@ connection.commit()
 #                FOREIGN KEY (user_id) REFERENCES customers (user_id)
 #            )
 #            """)
+# conn.commit()
+
+
+@app.after_request
+def after_request(response):
+    """Ensure responses aren't cached"""
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Expires'] = 0
+    response.headers['Pragma'] = 'no-cache'
+    return response
 
 
 @app.route("/")
@@ -86,8 +83,8 @@ def register():
             return apology("must provide username", 400)
 
         # Query database for username
-        db.execute("SELECT * FROM customers WHERE username = ?", [request.form.get('username')])
-        data = db.fetchall()
+        c.execute("SELECT * FROM users WHERE username = ?", [request.form.get('username')])
+        data = c.fetchall()
         
         # Ensure username is not already taken
         if len(data) != 0:
@@ -102,12 +99,9 @@ def register():
             return apology('password and confirmation do not match')
 
         # Insert new users login credentials into database
-        db.execute("""INSERT INTO customers (username, password_hash, cash) VALUES(?,?,10000)""", 
+        c.execute("""INSERT INTO users (username, password_hash, cash) VALUES(?,?,10000)""", 
                    (request.form.get('username'), generate_password_hash(request.form.get('password'))))
-        
-        # Commit command and close connection
-        connection.commit()
-        connection.close
+        conn.commit()
         
         # Confirm registration
         return redirect('index.html', 200)
