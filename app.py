@@ -42,12 +42,12 @@ conn.commit()
 c.execute("""CREATE TABLE IF NOT EXISTS transactions
            (
                transaction_id INTEGER PRIMARY KEY,
-               symbol TEXT,
-               shares REAL,
-               price REAL,
+               symbol TEXT NOT NULL,
+               shares REAL NOT NULL,
+               price REAL NOT NULL,
                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
-               symbol_balance INTEGER,
-               user_id INTEGER,
+               symbol_balance INTEGER NOT NULL,
+               user_id INTEGER NOT NULL,
                FOREIGN KEY (user_id) REFERENCES users (user_id)
            )
            """)
@@ -100,7 +100,7 @@ def register():
             return apology('password and confirmation do not match')
 
         # Insert new users login credentials into database
-        c.execute("""INSERT INTO users (username, password_hash, cash) VALUES(?,?,10000)""", 
+        c.execute("""INSERT INTO users (username, password_hash, cash) VALUES (?,?,10000)""", 
                    (request.form.get('username'), generate_password_hash(request.form.get('password'))))
         conn.commit()
         
@@ -188,3 +188,93 @@ def quote():
     # User reached route via GET (as by clicking a link or via redirect)
     else:
         return render_template('quote.html')
+    
+    
+@app.route("/buy", methods=["GET", "POST"])
+@login_required
+def buy():
+    """Buy shares of stock"""
+    
+    # Get current user id
+    user_id = session.get('user_id')
+
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == 'POST':
+
+        # Ensure stock symbol was submitted
+        if not request.form.get('symbol'):
+            return apology('no stock entered', 403)
+        else:
+            symbol = request.form.get('symbol')
+
+        # Ensure number of shares is an integer or float
+        shares = request.form.get('shares')
+        if not shares.isdigit():
+            return apology('number of shares must be numerical', 400)
+
+        # Ensure number of shares is a positive integer
+        if float(shares) < 0:
+            return apology('number of shares invalid', 400)
+
+        # Ensure stock symbol is valid and look up stocks current price
+        quote = lookup(symbol)
+        if not quote:
+            return apology('stock not found', 400)
+
+        # If lookup succesfull
+        price = quote['price']
+
+        # Lookup how much cash the user has
+        c.execute("SELECT cash FROM users WHERE user_id = ?", [user_id])
+        cash = c.fetchall()
+
+        # Ensure user has enough cash to purchase required shares
+        value = float(shares) * float(price)
+        if value > cash[0][0]:
+            return apology('not enough cash')
+
+        # Purchase shares
+        cash = cash[0][0] - value
+        c.execute("UPDATE users SET cash = ? WHERE user_id = ?", (cash, user_id))
+        conn.commit()
+        c.execute("SELECT symbol_balance FROM transactions WHERE symbol = ? AND user_id = ?", (symbol, user_id))
+        symbol_balance = c.fetchone()
+        if not symbol_balance:
+            symbol_balance = 0
+            new_symbol_balance = float(symbol_balance) + float(shares)
+        else:
+            symbol_balance = symbol_balance
+            new_symbol_balance = float(symbol_balance[0]) + float(shares)
+        c.execute("INSERT INTO transactions (user_id, symbol, shares, price, symbol_balance) VALUES (?,?,?,?,?)", 
+                  (user_id, symbol, shares, price, new_symbol_balance))
+        conn.commit()
+
+        # # If succesfull, get user's transactions from database
+        # c.execute("""SELECT * WHERE user_id = ? GROUP BY symbol HAVING symbol_balance > 0""", (user_id))
+        # transactions = c.fetchall()
+        # return jsonify(transactions)
+
+        # # If no transactions, return apology
+        # if not transactions:
+        #     return apology('no transactions yet')
+
+        # # Get user's cash from database
+        # c.execute("SELECT cash FROM customers WHERE user_id = ?", user_id)
+        # cash = c.fetchall()
+
+        # # Get transaction data
+        # portfolio_balance = cash
+        # for transaction in transactions:
+        #     name = lookup(transaction['symbol'])['name']
+        #     price = lookup(transaction['symbol'])['price']
+        #     value = transaction['SUM(shares)'] * price
+        #     transaction.update({'name': name, 'price': usd(price), 'value': usd(value)})
+        #     portfolio_balance += price * transaction['symbol_balance']
+
+        # User reached route via GET (as by clicking a link or via redirect
+        return render_template('index.html')#, transactions=transactions, cash=usd(cash), total_funds=usd(portfolio_balance))
+
+
+    # User reached route via GET (as by clicking a link or via redirect)
+    else:
+        return render_template('buy.html')
