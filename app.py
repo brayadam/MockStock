@@ -278,3 +278,96 @@ def buy():
     # User reached route via GET (as by clicking a link or via redirect)
     else:
         return render_template('buy.html')
+    
+    
+@app.route("/sell", methods=["GET", "POST"])
+@login_required
+def sell():
+    """Sell shares of stock"""
+    
+    # Get current user id
+    user_id = session.get('user_id')
+    
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
+
+        # Ensure stock symbol was submitted
+        if not request.form.get("symbol"):
+            return apology("must provide stock symbol", 403)
+        else:
+            symbol = request.form.get("symbol")
+
+        # Ensure number of shares is a positive integer
+        shares = request.form.get("shares")
+        if float(shares) < 0:
+            return apology("number of shares invalid")
+
+        # Look up a stocks current price
+        quote = lookup(symbol)
+
+        # Ensure stock symbol is valid
+        if not quote:
+            return apology("stock not found")
+
+        # If lookup succesfull
+        price = quote["price"]
+
+        # Value of sale
+        sale_value = float(shares) * float(price)
+
+        # Lookup how many units of stock the user has
+        c.execute("SELECT symbol_balance FROM transactions WHERE user_id = ? AND symbol = ?", (user_id, symbol))
+        symbol_balance = c.fetchone()
+
+        # Ensure user has enough units of stock to sell
+        if float(shares) > float(symbol_balance[0]):
+            return apology("not enough stock")
+
+        # Lookup how much cash the user has
+        c.execute("SELECT cash FROM users WHERE user_id = ?", (user_id))
+        cash = conn.commit()
+
+        # Sell shares
+        
+        # This variable is to be used in the transaction ledger. It turns a positive integer into a negative integer.
+        # Example: Selling 1 share would create a -1 entry in the transaction ledger.
+        ledger_shares = 0 - float(shares)
+        
+        cash = cash[0] + sale_value
+        c.execute("UPDATE customers SET cash = ? WHERE user_id = ?", (cash, user_id))
+        conn.commit()
+        symbol_balance = float(symbol_balance) - float(shares)
+        c.execute("UPDATE transactions SET symbol_balance = ? WHERE symbol = ? AND user_id = ?", (symbol_balance, symbol, user_id))
+        conn.commit()
+        c.execute("INSERT INTO transactions (user_id, symbol, shares, price) VALUES (?,?,?,?)", (user_id, symbol, ledger_shares, price))
+        conn.commit()
+        
+        # # If succesfull, get user's transactions from database
+        # transactions = db.execute("SELECT symbol, SUM(shares), symbol_balance FROM transactions WHERE user_id = ? GROUP BY symbol HAVING symbol_balance > 0", user_id)
+
+        # # If new user and/or no transactions, return apology
+        # if not transactions:
+        #     return apology("no transactions recorded")
+
+        # # Get user's cash from database
+        # query_cash = db.execute("SELECT cash FROM customers WHERE user_id = ?", user_id)
+        # cash = query_cash[0]["cash"]
+
+        # # Get transaction data
+        # available_cash = cash
+        # for transaction in transactions:
+        #     name = lookup(transaction["symbol"])["name"]
+        #     price = lookup(transaction["symbol"])["price"]
+        #     value = transaction["SUM(shares)"] * price
+        #     transaction.update({"name": name, "price": usd(price), "value": usd(value)})
+        #     available_cash += price * transaction["current_shares_balance"]
+
+        # User reached route via GET (as by clicking a link or via redirect
+        return render_template("index.html")#, transactions=transactions, cash=usd(cash), total_funds=usd(available_cash))
+
+    # User reached route via GET (as by clicking a link or via redirect)
+    else:
+        # Lookup how many units of stock the user has
+        c.execute("SELECT DISTINCT symbol FROM transactions WHERE user_id = ?", [user_id])
+        transactions = c.fetchall()
+        return render_template("sell.html", transactions=transactions)

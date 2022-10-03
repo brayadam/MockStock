@@ -10,7 +10,7 @@
         <select class="form-select mx-auto w-auto" name="symbol">
             <option disabled selected>Symbol</option>
                 {% for transaction in transactions %}
-                    <option value = {{transaction.symbol}}> {{transaction.symbol.upper()}} </option value>
+                    <option value = {{transactions[transaction]}}> {{transaction[0].upper()}} </option value>
                 {% endfor %}
         </select>
     </div>
