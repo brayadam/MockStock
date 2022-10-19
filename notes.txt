@@ -1,0 +1,3 @@
+run flask in debug mode
+flask --app app.py --debug run
+

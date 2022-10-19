@@ -9,21 +9,19 @@
 <table class="table">
     <thead>
       <tr>
-        <th scope="col">Symbol</th>
         <th scope="col">Name</th>
+        <th scope="col">Symbol</th>
         <th scope="col">Shares</th>
         <th scope="col">Price</th>
-        <th scope="col">Total</th>
       </tr>
     </thead>
     <tbody>
         {% for transaction in transactions %}
             <tr>
-                <td>{{ transaction["symbol"].upper() }}</td>
-                <td>{{ transaction["name"] }}</td>
-                <td>{{ transaction["SUM(shares)"] }}</td>
-                <td>{{ transaction["price"] }}</td>
-                <td>{{ transaction["value"] }}</td>
+                <td>{{ name }}</td>
+                <td>{{ transaction[1].upper() }}</td>
+                <td>{{ transaction[5] }}</td>
+                <td>{{ avgprice }}</td>
                 <td></td>
             </tr>
         {% endfor %}

@@ -2,28 +2,35 @@
 
 
 {% block title %}
-    Portfolio
+    History
 {% endblock %}
 
 {% block main %}
 <table class="table">
     <thead>
       <tr>
+        <th scope="col">Transaction ID</th>
+        <th scope="col">Name</th>
         <th scope="col">Symbol</th>
         <th scope="col">Shares</th>
         <th scope="col">Price</th>
-        <th scope="col">Transacted</th>
+        <th scope="col">Timestamp</th>
       </tr>
     </thead>
     <tbody>
         {% for transaction in transactions %}
             <tr>
-                <td>{{ transaction["symbol"].upper() }}</td>
-                <td>{{ transaction["shares"] }}</td>
-                <td>{{ transaction["price"] }}</td>
-                <td>{{ transaction["timestamp"] }}</td>
+                <td>{{ transaction[0] }}</td>
+                <td>{{ name }}</td>
+                <td>{{ transaction[1].upper() }}</td>
+                <td>{{ transaction[2] }}</td>
+                <td>{{ transaction[3] }}</td>
+                <td>{{ transaction[4] }}</td>
+                <td></td>
             </tr>
-    {% endfor %}
+        {% endfor %}
     </tbody>
+    <tfoot>
+    </tfoot>
   </table>
 {% endblock %}

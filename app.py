@@ -1,4 +1,5 @@
 import os
+from pickle import TRUE
 import sqlite3
 from flask import Flask, flash, redirect, render_template, request, session
 from flask_session import Session
@@ -24,7 +25,7 @@ app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
 # Connect to database and create a cursor
-conn = sqlite3.connect('finance.db', check_same_thread=False)
+conn = sqlite3.connect('database.db', check_same_thread=False)
 c = conn.cursor()
 
 # Create a users table
@@ -46,7 +47,7 @@ c.execute("""CREATE TABLE IF NOT EXISTS transactions
                shares REAL NOT NULL,
                price REAL NOT NULL,
                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
-               symbol_balance INTEGER NOT NULL,
+               sum_shares REAL,
                user_id INTEGER NOT NULL,
                FOREIGN KEY (user_id) REFERENCES users (user_id)
            )
@@ -68,8 +69,33 @@ def after_request(response):
 def index():
     """Show portfolio of stocks"""
     
-    # User reached route via GET (as by clicking a link or via redirect
-    return render_template('index.html')
+    # If user is not logged in
+    if not session.get("user_id"):
+        return render_template("login.html")
+    
+    else:
+        
+        # Get current user id
+        user_id = session.get('user_id')
+        
+        # Get user's cash
+        c.execute("SELECT cash FROM users WHERE user_id = ?", [user_id])
+        cash = c.fetchone()
+        cash = usd(cash[0])
+        
+        # Get user's portfolio
+        c.execute("SELECT * FROM transactions WHERE user_id = ? GROUP BY SYMBOL", [user_id])
+        transactions = c.fetchall()
+        for transaction in transactions:
+            name = lookup(transaction["symbol"])["name"]
+            price = lookup(transaction["symbol"])["price"]
+            value = transaction["SUM(shares)"] * price
+            transaction.update({"name": name, "price": usd(price), "value": usd(value)})
+            portfolio_balance = cash + (price * transaction["current_shares_balance"])
+        
+        
+        return render_template('index2.html', transactions = transactions, cash = cash, portfolio_balance = portfolio_balance)
+
                            
                            
 @app.route("/register", methods=["GET", "POST"])
@@ -105,7 +131,7 @@ def register():
         conn.commit()
         
         # Confirm registration
-        return redirect('index.html', 200)
+        return render_template('index.html')
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -142,7 +168,7 @@ def login():
         session['user_id'] = data[0][0]
 
         # Redirect user to index page
-        return redirect('/', 200)
+        return render_template('index.html')
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -237,43 +263,19 @@ def buy():
         cash = cash[0][0] - value
         c.execute("UPDATE users SET cash = ? WHERE user_id = ?", (cash, user_id))
         conn.commit()
-        c.execute("SELECT symbol_balance FROM transactions WHERE symbol = ? AND user_id = ?", (symbol, user_id))
-        symbol_balance = c.fetchone()
-        if not symbol_balance:
-            symbol_balance = 0
-            new_symbol_balance = float(symbol_balance) + float(shares)
+        c.execute("SELECT sum_shares FROM transactions WHERE symbol = ? AND user_id = ?", (symbol, user_id))
+        sum_shares = c.fetchone()
+        if not sum_shares:
+            sum_shares = 0
+            sum_shares = float(sum_shares) + float(shares)
         else:
-            symbol_balance = symbol_balance
-            new_symbol_balance = float(symbol_balance[0]) + float(shares)
-        c.execute("INSERT INTO transactions (user_id, symbol, shares, price, symbol_balance) VALUES (?,?,?,?,?)", 
-                  (user_id, symbol, shares, price, new_symbol_balance))
+            sum_shares = sum_shares[0] + float(shares)
+        c.execute("INSERT INTO transactions (user_id, symbol, shares, price) VALUES (?,?,?,?)", 
+                  (user_id, symbol, shares, price))
         conn.commit()
-
-        # # If succesfull, get user's transactions from database
-        # c.execute("""SELECT * WHERE user_id = ? GROUP BY symbol HAVING symbol_balance > 0""", (user_id))
-        # transactions = c.fetchall()
-        # return jsonify(transactions)
-
-        # # If no transactions, return apology
-        # if not transactions:
-        #     return apology('no transactions yet')
-
-        # # Get user's cash from database
-        # c.execute("SELECT cash FROM customers WHERE user_id = ?", user_id)
-        # cash = c.fetchall()
-
-        # # Get transaction data
-        # portfolio_balance = cash
-        # for transaction in transactions:
-        #     name = lookup(transaction['symbol'])['name']
-        #     price = lookup(transaction['symbol'])['price']
-        #     value = transaction['SUM(shares)'] * price
-        #     transaction.update({'name': name, 'price': usd(price), 'value': usd(value)})
-        #     portfolio_balance += price * transaction['symbol_balance']
-
-        # User reached route via GET (as by clicking a link or via redirect
-        return render_template('index.html')#, transactions=transactions, cash=usd(cash), total_funds=usd(portfolio_balance))
-
+        c.execute("UPDATE transactions SET sum_shares = ? WHERE user_id = ? AND symbol = ?", (sum_shares, user_id, symbol))
+        conn.commit()
+        return render_template('index.html')
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -286,7 +288,7 @@ def sell():
     """Sell shares of stock"""
     
     # Get current user id
-    user_id = session.get('user_id')
+    user_id = session.get("user_id")
     
     # User reached route via POST (as by submitting a form via POST)
     if request.method == "POST":
@@ -294,8 +296,7 @@ def sell():
         # Ensure stock symbol was submitted
         if not request.form.get("symbol"):
             return apology("must provide stock symbol", 403)
-        else:
-            symbol = request.form.get("symbol")
+        else: symbol = request.form.get("symbol")
 
         # Ensure number of shares is a positive integer
         shares = request.form.get("shares")
@@ -316,54 +317,34 @@ def sell():
         sale_value = float(shares) * float(price)
 
         # Lookup how many units of stock the user has
-        c.execute("SELECT symbol_balance FROM transactions WHERE user_id = ? AND symbol = ?", (user_id, symbol))
+        c.execute("SELECT SUM(shares) FROM transactions WHERE user_id = ? AND symbol = ?", (user_id, symbol))
         symbol_balance = c.fetchone()
 
         # Ensure user has enough units of stock to sell
-        if float(shares) > float(symbol_balance[0]):
+        if float(shares) > symbol_balance[0]:
             return apology("not enough stock")
 
         # Lookup how much cash the user has
-        c.execute("SELECT cash FROM users WHERE user_id = ?", (user_id))
-        cash = conn.commit()
+        c.execute("SELECT cash FROM users WHERE user_id = ?", [user_id])
+        cash = c.fetchone()
 
         # Sell shares
-        
-        # This variable is to be used in the transaction ledger. It turns a positive integer into a negative integer.
-        # Example: Selling 1 share would create a -1 entry in the transaction ledger.
-        ledger_shares = 0 - float(shares)
-        
+        sell_shares = 0 - float(shares)
         cash = cash[0] + sale_value
-        c.execute("UPDATE customers SET cash = ? WHERE user_id = ?", (cash, user_id))
+        c.execute("UPDATE users SET cash = ? WHERE user_id = ?", (cash, user_id))
         conn.commit()
-        symbol_balance = float(symbol_balance) - float(shares)
-        c.execute("UPDATE transactions SET symbol_balance = ? WHERE symbol = ? AND user_id = ?", (symbol_balance, symbol, user_id))
+        c.execute("SELECT SUM(shares) FROM transactions WHERE user_id = ? AND symbol = ?", (user_id, symbol))
+        sum_shares = c.fetchone()
+        sum_shares = sum_shares[0] + sell_shares
+        symbol_balance = symbol_balance[0] - float(shares)
+        c.execute("INSERT INTO transactions (user_id, symbol, shares, price) VALUES (?,?,?,?)", 
+                  (user_id, symbol, sell_shares, price))
         conn.commit()
-        c.execute("INSERT INTO transactions (user_id, symbol, shares, price) VALUES (?,?,?,?)", (user_id, symbol, ledger_shares, price))
+        c.execute("UPDATE transactions SET sum_shares = ? WHERE user_id = ? AND symbol = ?", (sum_shares, user_id, symbol))
         conn.commit()
-        
-        # # If succesfull, get user's transactions from database
-        # transactions = db.execute("SELECT symbol, SUM(shares), symbol_balance FROM transactions WHERE user_id = ? GROUP BY symbol HAVING symbol_balance > 0", user_id)
-
-        # # If new user and/or no transactions, return apology
-        # if not transactions:
-        #     return apology("no transactions recorded")
-
-        # # Get user's cash from database
-        # query_cash = db.execute("SELECT cash FROM customers WHERE user_id = ?", user_id)
-        # cash = query_cash[0]["cash"]
-
-        # # Get transaction data
-        # available_cash = cash
-        # for transaction in transactions:
-        #     name = lookup(transaction["symbol"])["name"]
-        #     price = lookup(transaction["symbol"])["price"]
-        #     value = transaction["SUM(shares)"] * price
-        #     transaction.update({"name": name, "price": usd(price), "value": usd(value)})
-        #     available_cash += price * transaction["current_shares_balance"]
 
         # User reached route via GET (as by clicking a link or via redirect
-        return render_template("index.html")#, transactions=transactions, cash=usd(cash), total_funds=usd(available_cash))
+        return render_template("index.html")
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -371,3 +352,53 @@ def sell():
         c.execute("SELECT DISTINCT symbol FROM transactions WHERE user_id = ?", [user_id])
         transactions = c.fetchall()
         return render_template("sell.html", transactions=transactions)
+    
+    
+@app.route("/deposit", methods=["GET", "POST"])
+@login_required
+def deposit():
+    """Deposit funds."""
+    
+    # Get current user id
+    user_id = session.get('user_id')
+
+    # User reached route via POST (as by submitting a form via POST)
+    if request.method == "POST":
+
+        # Ensure all input fields are not blank
+        if not request.form.get("deposit_amount"):
+            return apology("must provide deposit amount", 403)
+
+        # Ensure deposit amount is a positive integer
+        if float(request.form.get("deposit_amount")) < 100:
+            return apology("deposit amount must be over $100")
+        
+        if float(request.form.get("deposit_amount")) > 50000:
+            return apology("max deposit $50,000")
+
+        # If successfull deposit, update user funds
+        c.execute("SELECT cash FROM users WHERE user_id = ?", [user_id])
+        user_cash = c.fetchone()
+        deposit = (request.form.get("deposit_amount"))
+        user_cash = float(user_cash[0]) + float(deposit)
+        c.execute("UPDATE users SET cash = ? WHERE user_id = ?", (user_cash, user_id))
+        conn.commit()
+        return render_template("buy.html")
+
+    # User reached route via GET (as by clicking a link or via redirect)
+    else:
+        return render_template("deposit.html")
+    
+    
+@app.route("/history")
+@login_required
+def history():
+    """Show portfolio of stocks"""
+    
+    # User reached route via GET (as by clicking a link or via redirect
+    
+    # Get current user id
+    user_id = session.get('user_id')
+    c.execute("SELECT * FROM transactions WHERE user_id = ?", [user_id])
+    transactions = c.fetchall()
+    return render_template('history.html', transactions = transactions)
