@@ -1,5 +1,4 @@
 import os
-from pickle import TRUE
 import sqlite3
 from flask import Flask, flash, redirect, render_template, request, session
 from flask_session import Session
@@ -81,20 +80,17 @@ def index():
         # Get user's cash
         c.execute("SELECT cash FROM users WHERE user_id = ?", [user_id])
         cash = c.fetchone()
-        cash = usd(cash[0])
+        cash = cash[0]
         
         # Get user's portfolio
-        c.execute("SELECT * FROM transactions WHERE user_id = ? GROUP BY SYMBOL", [user_id])
+        c.execute("SELECT symbol, sum_shares FROM transactions WHERE user_id = ? GROUP BY symbol HAVING sum_shares > 0", [user_id])
         transactions = c.fetchall()
+        portfolio_balance = cash
+        
         for transaction in transactions:
-            name = lookup(transaction["symbol"])["name"]
-            price = lookup(transaction["symbol"])["price"]
-            value = transaction["SUM(shares)"] * price
-            transaction.update({"name": name, "price": usd(price), "value": usd(value)})
-            portfolio_balance = cash + (price * transaction["current_shares_balance"])
-        
-        
-        return render_template('index2.html', transactions = transactions, cash = cash, portfolio_balance = portfolio_balance)
+            portfolio_balance += lookup(transaction[0])['price'] * transaction[1]
+            
+        return render_template('index2.html', cash=usd(cash), portfolio_balance=usd(portfolio_balance), transactions=transactions, lookup=lookup, usd=usd)
 
                            
                            
