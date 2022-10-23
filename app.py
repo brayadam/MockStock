@@ -90,7 +90,7 @@ def index():
         for transaction in transactions:
             portfolio_balance += lookup(transaction[0])['price'] * transaction[1]
             
-        return render_template('index2.html', cash=usd(cash), portfolio_balance=usd(portfolio_balance), transactions=transactions, lookup=lookup, usd=usd)
+        return render_template('index.html', cash=usd(cash), portfolio_balance=usd(portfolio_balance), transactions=transactions, lookup=lookup, usd=usd)
 
                            
                            
@@ -126,8 +126,14 @@ def register():
                    (request.form.get('username'), generate_password_hash(request.form.get('password'))))
         conn.commit()
         
+        # Remember which user has logged in
+        c.execute("SELECT user_id FROM users WHERE username = ?", [request.form.get("username")])
+        user_id = c.fetchone()
+        print(user_id[0])
+        session['user_id'] = user_id[0]
+        
         # Confirm registration
-        return render_template('index.html')
+        return redirect('/buy')
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -164,7 +170,7 @@ def login():
         session['user_id'] = data[0][0]
 
         # Redirect user to index page
-        return render_template('index.html')
+        return redirect('/')
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -248,15 +254,15 @@ def buy():
 
         # Lookup how much cash the user has
         c.execute("SELECT cash FROM users WHERE user_id = ?", [user_id])
-        cash = c.fetchall()
+        cash = c.fetchone()
 
         # Ensure user has enough cash to purchase required shares
         value = float(shares) * float(price)
-        if value > cash[0][0]:
+        if value > cash[0]:
             return apology('not enough cash')
 
         # Purchase shares
-        cash = cash[0][0] - value
+        cash = cash[0] - value
         c.execute("UPDATE users SET cash = ? WHERE user_id = ?", (cash, user_id))
         conn.commit()
         c.execute("SELECT sum_shares FROM transactions WHERE symbol = ? AND user_id = ?", (symbol, user_id))
@@ -271,7 +277,8 @@ def buy():
         conn.commit()
         c.execute("UPDATE transactions SET sum_shares = ? WHERE user_id = ? AND symbol = ?", (sum_shares, user_id, symbol))
         conn.commit()
-        return render_template('index.html')
+        
+        return redirect('/history')
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -340,7 +347,7 @@ def sell():
         conn.commit()
 
         # User reached route via GET (as by clicking a link or via redirect
-        return render_template("index.html")
+        return redirect("/history")
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -379,7 +386,7 @@ def deposit():
         user_cash = float(user_cash[0]) + float(deposit)
         c.execute("UPDATE users SET cash = ? WHERE user_id = ?", (user_cash, user_id))
         conn.commit()
-        return render_template("buy.html")
+        return redirect("/buy")
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -397,4 +404,4 @@ def history():
     user_id = session.get('user_id')
     c.execute("SELECT * FROM transactions WHERE user_id = ?", [user_id])
     transactions = c.fetchall()
-    return render_template('history.html', transactions = transactions)
+    return render_template('history.html', transactions=transactions, lookup=lookup, usd=usd)

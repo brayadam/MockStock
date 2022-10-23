@@ -21,10 +21,10 @@
         {% for transaction in transactions %}
             <tr>
                 <td>{{ transaction[0] }}</td>
-                <td>{{ name }}</td>
+                <td>{{ lookup(transaction[1])["name"] }}</td>
                 <td>{{ transaction[1].upper() }}</td>
                 <td>{{ transaction[2] }}</td>
-                <td>{{ transaction[3] }}</td>
+                <td>{{ usd(transaction[3]) }}</td>
                 <td>{{ transaction[4] }}</td>
                 <td></td>
             </tr>
